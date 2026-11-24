@@ -3,7 +3,7 @@
 
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { MONO, focusedAgent, prefs, setPrefs, section } from "./lib.js";
+import { MONO, HUE, focusedAgent, prefs, setPrefs, section } from "./lib.js";
 import { briefSection, contextSection, activitySection, cacheSection } from "./agent.js";
 import { changesSection, needsRefresh, refreshChanges } from "./changes.js";
 import { serversSection, foreignSection } from "./servers.js";
@@ -91,7 +91,7 @@ export function renderDock(view, t, cx, dock = "agent") {
     .children(groups.map((g) => section(t, `g:${g.id}`, g.title, {
       summary: summaryOf(g.list),
       body: groupBody(t, g.list, wide),
-    }, { group: true })));
+    }, { group: true, hue: HUE[g.id] })));
   return div().id("dock-root").size_full()
     .on_size_change((size, cx) => { view.size = size; cx.notify(); }).child(body);
 }

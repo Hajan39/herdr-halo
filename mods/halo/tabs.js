@@ -4,7 +4,8 @@
 import { div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { spaces, panes, agents, run, shared, layout, openOverlay } from "herdr";
-import { MONO, clean, prefs, setPrefs } from "./lib.js";
+import { MONO, HUE, clean, prefs, setPrefs } from "./lib.js";
+import { collieChip } from "./collie.js";
 import { visibleGroups } from "./dock.js";
 import { dot } from "./tree.js";
 
@@ -54,7 +55,25 @@ function findNode(node, id) {
   return null;
 }
 
-const side = (child) => () => { run("layout.select", { stack: "side-body", child }); run("layout.toggle", { id: "side" }); };
+// The side column holds Files and Changes in one stack: a click on the shown one
+// closes it, on the other one switches to it.
+const sideToggle = (child, on) => () => {
+  if (on) return run("layout.hide", { id: "side" });
+  run("layout.select", { stack: "side-body", child });
+  run("layout.show", { id: "side" });
+};
+
+// One segmented control for every panel, each item tinted with its domain hue when on.
+function segment(t, items) {
+  return h_flex().id("panels").h(28).p(2).gap(2).items_center().rounded(7).border(1).border_color(t.border)
+    .children(items.map(([id, text, hue, on, tip, onClick]) => h_flex().id(`seg-${id}`).h(22).px(9).gap(6).items_center()
+      .rounded(5).cursor_pointer().tooltip(tip)
+      .when(on, (el) => el.bg(`${hue}1f`))
+      .hover((s) => s.bg(on ? `${hue}2e` : t.hover))
+      .on_mouse_down("left", stop).on_click(onClick)
+      .child(div().size(5).rounded(3).bg(on ? hue : t.border))
+      .child(div().text_size(11.5).text_color(on ? t.foreground : t.dim).child(text))));
+}
 const sep = (t) => div().w(1).h(14).bg(t.border).mx(2);
 
 // Compared against the live layout, not a remembered state: a layout reload resets
@@ -88,7 +107,10 @@ export function renderTabs(view, t) {
   const all = panes();
   const isAgent = (tab) => all.some((x) => x.tab === tab.id && x.program?.agent);
   const tabs = (space?.tabs ?? []).filter((tab) => !tab.settled && (p.agents || !isAgent(tab) || tab.active));
-  const sidebarHidden = Boolean(findNode(shared("layout") === "halo" ? layout() : null, "sidebar")?.hidden);
+  const root = shared("layout") === "halo" ? layout() : null;
+  const sidebarHidden = Boolean(findNode(root, "sidebar")?.hidden);
+  const sideOn = Boolean(root) && !findNode(root, "side")?.hidden;
+  const sideChild = findNode(root, "side-body")?.active;
 
   const waiting = agents().filter((a) => a.status === "blocked").length;
   return h_flex().size_full().px(10).gap(6).items_center()
@@ -105,15 +127,15 @@ export function renderTabs(view, t) {
     .child(button(t, "new-agent", "square-pen", "New Claude", () => run("tab.new", { argv: ["claude"], name: "claude", focus: true })))
     .child(button(t, "new-task", "git-branch", "New task: worktree + Claude (cmd-shift-t)", () => run("mod.open", { name: "halo-task" })))
     .child(sep(t))
-    .child(button(t, "files", "files", "Files", side("files")))
-    .child(button(t, "changes", "git-compare", "Changes", side("changes")))
+    .child(segment(t, [
+      ["agent", "Agent", t[HUE.agent], p.panel, "Agent dock: context, activity, cache (follows the focused agent)", () => setPrefs({ panel: !p.panel })],
+      ["dev", "Dev", t[HUE.dev], p.devdock, "Dev dock: git, MRs, dev servers, ports", () => setPrefs({ devdock: !p.devdock })],
+      ["files", "Files", t.ansi6, sideOn && sideChild === "files", "File browser", sideToggle("files", sideOn && sideChild === "files")],
+      ["changes", "Diff", t[HUE.git], sideOn && sideChild === "changes", "Changes in this repo", sideToggle("changes", sideOn && sideChild === "changes")],
+    ]))
+    .when(Boolean(collieChip(t, stop)), (el) => el.child(collieChip(t, stop)))
     .child(sep(t))
     .child(button(t, "agents-toggle", "layers", p.agents ? "Hide agent tabs" : "Show agent tabs",
       () => setPrefs({ agents: !p.agents }), p.agents))
-    .child(button(t, "sidebar-toggle", "panel-left", "Toggle sidebar", () => run("layout.toggle", { id: "sidebar" }), !sidebarHidden))
-    .child(sep(t))
-    .child(button(t, "devdock-toggle", "mods/halo/icons/dev.svg", p.devdock ? "Hide dev dock (servers, ports)" : "Show dev dock (servers, ports)",
-      () => setPrefs({ devdock: !p.devdock }), p.devdock))
-    .child(button(t, "panel-toggle", "panel-right", p.panel ? "Agent dock: auto (click to hide)" : "Agent dock: hidden",
-      () => setPrefs({ panel: !p.panel }), p.panel));
+    .child(button(t, "sidebar-toggle", "panel-left", "Toggle sidebar", () => run("layout.toggle", { id: "sidebar" }), !sidebarHidden));
 }

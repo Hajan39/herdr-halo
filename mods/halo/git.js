@@ -172,7 +172,7 @@ function mrRow(t, mr, key) {
     .border_l(1).border_color(t.border)
     .hover((s) => s.bg(t.hover)).tooltip(`Open ${mr.ref}`).on_click(() => openUrl(mr.url))
     .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); openMenu("mr", { id: mr.id, url: mr.url }); })
-    .child(div().w(48).flex_none().font_family(MONO).text_size(10.5).text_color(t.dim).child(mr.id))
+    .child(div().w(48).flex_none().font_family(MONO).text_size(10.5).text_color(t.ansi4).opacity(0.85).child(mr.id))
     .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(mr.draft ? t.dim : t.foreground).child(mr.title))
     .when(mr.draft, (el) => el.child(div().flex_none().font_family(MONO).text_size(10.5).text_color(t.dim).child("draft")));
 }

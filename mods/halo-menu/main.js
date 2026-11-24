@@ -1,4 +1,4 @@
-// Right-click menus for halo (popup): props { kind: "agent" | "port" | "mr", target }.
+// Right-click menus for halo (popup): props { kind: "agent" | "port" | "mr" | "collie", target }.
 // Items run Herdr commands or a small exec; keyboard: up/down, enter, esc.
 
 import { View, div, svg } from "gpui-kit";
@@ -50,7 +50,18 @@ function mrItems(tg) {
   ];
 }
 
-export const ITEMS = { agent: agentItems, port: portItems, mr: mrItems };
+// Collie's status lines come first as "info" rows (not pickable), then its actions.
+function collieItems(tg) {
+  const sessions = `${tg.sessions} session${tg.sessions === 1 ? "" : "s"}${tg.busy ? `, ${tg.busy} working` : ""}${tg.waiting ? `, ${tg.waiting} waiting` : ""}`;
+  return [
+    [`Collie ${tg.version}${tg.crew ? ` · ${tg.crew}` : ""}`, "mods/halo/icons/phone.svg", null, "info"],
+    [`${tg.devices} paired · ${sessions}`, "layers", null, "info"],
+    ["Pair a new device", "plus", () => run("pane.split", { direction: "down", argv: ["zsh", "-lic", "collie pair; echo; read -sk '?Press any key to close'"] })],
+    ["Restart bridge", "mods/halo/icons/restart.svg", () => exec("zsh", ["-lc", "collie restart"]).catch(() => null)],
+  ];
+}
+
+export const ITEMS = { agent: agentItems, port: portItems, mr: mrItems, collie: collieItems };
 
 export default class HaloMenu extends View {
   init(_props, cx) {
@@ -65,7 +76,7 @@ export default class HaloMenu extends View {
   }
 
   pick(item) {
-    if (!item) return;
+    if (!item?.[2]) return;
     closeOverlay(props().overlay);
     item[2]();
   }
@@ -87,7 +98,7 @@ export default class HaloMenu extends View {
         .when(i === this.at, (el) => el.bg(t.selected))
         .hover((s) => s.bg(t.hover))
         .on_click(() => this.pick(items[i]))
-        .child(svg(ICON(icon)).size(13).text_color(tone === "danger" ? t.blocked : t.muted))
-        .child(div().text_size(12.5).text_color(tone === "danger" ? t.blocked : t.foreground).child(label))));
+        .child(svg(ICON(icon)).size(13).text_color(tone === "danger" ? t.blocked : tone === "info" ? t.dim : t.muted))
+        .child(div().text_size(12.5).text_color(tone === "danger" ? t.blocked : tone === "info" ? t.muted : t.foreground).child(label))));
   }
 }

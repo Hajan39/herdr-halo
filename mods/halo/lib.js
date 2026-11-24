@@ -37,6 +37,7 @@ function menuItemCount(kind, target) {
     return 4 + (a.status === "blocked") + panes().some((p) => p.pane === a.pane) + (a.status === "working");
   }
   if (kind === "port") return 3 + Boolean(target.terminal);
+  if (kind === "collie") return 4;
   return 3;
 }
 
@@ -49,7 +50,7 @@ const chevron = (t, isFolded, size = 10) =>
 
 // A themed group (AGENT / GIT / DEV) or a section inside one. The header toggles the
 // fold. The summary shows only while folded: open, the body says it already.
-export function section(t, id, title, info, { group = false, byDefault = false } = {}) {
+export function section(t, id, title, info, { group = false, byDefault = false, hue = null } = {}) {
   if (!info) return null;
   // A one-line section (info.onOpen) has no body: its header opens something instead.
   const isFolded = info.onOpen ? true : folded(id, byDefault);
@@ -61,8 +62,9 @@ export function section(t, id, title, info, { group = false, byDefault = false }
     .on_click(() => (info.onOpen ? info.onOpen() : toggleFold(id, byDefault)))
     .when(Boolean(info.onOpen), (el) => el.tooltip(info.tooltip ?? ""))
     .child(div().flex_none().child(chevron(t, isFolded, group ? 11 : 9)))
+    .when(Boolean(hue), (el) => el.child(div().size(6).rounded(3).flex_none().bg(t[hue])))
     .child(div().flex_none().font_family(MONO).text_size(10.5).font_semibold()
-      .text_color(group ? t.foreground : t.muted).child(title))
+      .text_color(hue ? t[hue] : group ? t.foreground : t.muted).child(title))
     .child(div().flex_1().min_w(12).h(1).bg(t.border))
     .when(Boolean(summary) && isFolded, (el) => el.child(summary));
   return v_flex().gap(group ? 8 : 6)
@@ -71,6 +73,9 @@ export function section(t, id, title, info, { group = false, byDefault = false }
 }
 
 export const MONO = "JetBrainsMono Nerd Font Mono";
+
+// One hue per domain so a glance tells agent, git and dev apart; teal stays the agent's.
+export const HUE = { agent: "accent", git: "ansi4", dev: "ansi2", collie: "ansi5" };
 export const WARN_MS = 10 * 60 * 1000;
 export const CRIT_MS = 5 * 60 * 1000;
 
@@ -144,12 +149,12 @@ export function cacheTtl(status, t) {
   if (!status?.exp) return null;
   const left = status.exp * 1000 - Date.now();
   if (left <= 0) return { left, color: t.dim, text: "cold" };
-  const color = left < CRIT_MS ? t.blocked : left < WARN_MS ? t.ansi3 : t.dim;
+  const color = left < CRIT_MS ? t.blocked : left < WARN_MS ? t.ansi3 : t.done;
   return { left, color, text: dur(left) };
 }
 
 export function quotaColor(pct, t) {
-  return pct >= 90 ? t.blocked : pct >= 70 ? t.ansi3 : t.muted;
+  return pct >= 90 ? t.blocked : pct >= 70 ? t.ansi3 : t.accent;
 }
 
 // Newest statusline label across live Claude terminals: rate limits are per account,

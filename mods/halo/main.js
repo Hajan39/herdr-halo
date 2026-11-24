@@ -10,6 +10,7 @@ import { renderDock } from "./dock.js";
 import { handle as nav } from "./nav.js";
 import { pollServers, POLL_MS } from "./servers.js";
 import { pollGit, GIT_POLL_MS } from "./git.js";
+import { pollCollie, COLLIE_POLL_MS } from "./collie.js";
 
 const COMMANDS = {
   "toggle-panel": () => setPrefs({ panel: !prefs().panel }),
@@ -34,6 +35,8 @@ export default class Halo extends View {
       cx.timer.every(POLL_MS, (cx) => cx.spawn(async () => pollServers()));
       cx.spawn(async () => pollGit().catch(() => null));
       cx.timer.every(GIT_POLL_MS, (cx) => cx.spawn(async () => pollGit().catch(() => null)));
+      cx.spawn(async () => pollCollie().catch(() => null));
+      cx.timer.every(COLLIE_POLL_MS, (cx) => cx.spawn(async () => pollCollie().catch(() => null)));
     }
     if (this.role === "tabs") {
       cx.spawn(async (cx) => {
