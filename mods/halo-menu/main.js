@@ -3,7 +3,7 @@
 
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { run, exec, hc, theme, props, closeOverlay, agents, panes } from "herdr";
+import { run, exec, hc, theme, props, closeOverlay, agents, panes, shared, setShared } from "herdr";
 
 // Same guard as the dock: the pid may be stale, so kill only the same program.
 async function stopListener(tg) {
@@ -61,7 +61,15 @@ function collieItems(tg) {
   ];
 }
 
-export const ITEMS = { agent: agentItems, port: portItems, mr: mrItems, collie: collieItems };
+function projectItems(tg) {
+  const hide = () => {
+    const p = shared("halo.prefs") ?? {};
+    setShared("halo.prefs", { ...p, hiddenProjects: [...new Set([...(p.hiddenProjects ?? []), tg.key])] });
+  };
+  return [["Hide this project", "x", hide]];
+}
+
+export const ITEMS = { agent: agentItems, port: portItems, mr: mrItems, collie: collieItems, project: projectItems };
 
 export default class HaloMenu extends View {
   init(_props, cx) {

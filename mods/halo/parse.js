@@ -87,7 +87,9 @@ export function parseRemote(url) {
 // `glab auth status` -> hosts with a working login.
 export const loggedInHosts = (text) => [...(text ?? "").matchAll(/Logged in to (\S+)/g)].map((m) => m[1]);
 
-export const providerOf = (host) => (host === "github.com" ? "github" : host?.includes("gitlab") ? "gitlab" : null);
+// A self-hosted GitLab need not say "gitlab" in its name: a host glab is logged in to counts.
+export const providerOf = (host, gitlabHosts = []) =>
+  (host === "github.com" ? "github" : host?.includes("gitlab") || gitlabHosts.includes(host) ? "gitlab" : null);
 
 // A pipeline that was running and now isn't is worth a toast; anything else is not.
 const ACTIVE = new Set(["created", "waiting_for_resource", "preparing", "pending", "running", "IN_PROGRESS", "QUEUED", "PENDING"]);

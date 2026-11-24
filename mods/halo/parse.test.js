@@ -65,6 +65,14 @@ test("pipeline toasts only on running -> finished", () => {
 test("logged-in glab hosts", () => {
   const out = "gitlab.com\n  x No token\ngitlab.example.com\n  \u2713 Logged in to gitlab.example.com as me (/x/config.yml)\n";
   expect(loggedInHosts(out)).toEqual(["gitlab.example.com"]);
+  const two = `${out}git.acme.io\n  \u2713 Logged in to git.acme.io as me (/x/config.yml)\n`;
+  expect(loggedInHosts(two)).toEqual(["gitlab.example.com", "git.acme.io"]);
+});
+
+test("a self-hosted GitLab is known by glab's login, not its name", () => {
+  expect(providerOf("git.acme.io")).toBe(null);
+  expect(providerOf("git.acme.io", ["git.acme.io"])).toBe("gitlab");
+  expect(providerOf("github.com", ["git.acme.io"])).toBe("github");
 });
 
 import { groupByProject } from "./parse.js";

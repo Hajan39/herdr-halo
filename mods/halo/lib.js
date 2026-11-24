@@ -38,6 +38,7 @@ function menuItemCount(kind, target) {
   }
   if (kind === "port") return 3 + Boolean(target.terminal);
   if (kind === "collie") return 4;
+  if (kind === "project") return 1;
   return 3;
 }
 

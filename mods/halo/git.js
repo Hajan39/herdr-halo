@@ -6,7 +6,7 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { exec, run, spaces, panes, shared, setShared, notify } from "herdr";
-import { MONO, openMenu } from "./lib.js";
+import { MONO, openMenu, prefs, setPrefs, folded, toggleFold } from "./lib.js";
 import { parseRemote, providerOf, pipelineFinished, rollupStatus, loggedInHosts, groupByProject } from "./parse.js";
 
 export const GIT_POLL_MS = 60000;
@@ -71,7 +71,7 @@ async function repoOf(s, all) {
   return null;
 }
 
-async function spaceInfo(s, all) {
+async function spaceInfo(s, all, gitlabHosts) {
   if (s.machine) return null;
   const found = await repoOf(s, all);
   if (!found) return null;
@@ -79,15 +79,21 @@ async function spaceInfo(s, all) {
   const branchR = await run_("git", ["-C", folder, "branch", "--show-current"]);
   const remote = parseRemote(remoteR?.stdout);
   const branch = branchR?.stdout.trim();
-  const provider = providerOf(remote?.host);
+  const provider = providerOf(remote?.host, gitlabHosts);
   if (!remote || !branch || !provider) return null;
   const info = provider === "gitlab" ? await gitlabSpace(folder, remote, branch) : await githubSpace(folder);
   return { provider, host: remote.host, repo: remote.path, branch, ...info };
 }
 
-async function queues(gitlabHost, previous) {
-  if (!gitlabHost) return { reviews: [], mine: [] };
+// Every GitLab host glab is logged in to gets its own queues; each MR carries its host.
+async function gitlabQueues(hosts, previous) {
+  const per = await Promise.all(hosts.map((h) => gitlabHostQueues(h, previous?.gitlab?.[h])));
+  return Object.fromEntries(hosts.map((h, i) => [h, per[i]]));
+}
+
+async function gitlabHostQueues(gitlabHost, previous) {
   const host = ["--hostname", gitlabHost];
+  const tag = (m) => ({ ...shapeMr(m), host: gitlabHost });
   const user = json(await run_("glab", ["api", ...host, "user"]))?.username;
   const [reviews, mine] = await Promise.all([
     user ? run_("glab", ["api", ...host, `merge_requests?reviewer_username=${user}&state=opened&scope=all&per_page=20`]) : null,
@@ -95,13 +101,46 @@ async function queues(gitlabHost, previous) {
   ]);
   // Offline: keep the last good lists instead of wiping them.
   return {
-    reviews: reviews ? (json(reviews) ?? []).map(shapeMr) : previous?.reviews ?? [],
-    mine: mine ? (json(mine) ?? []).map(shapeMr) : previous?.mine ?? [],
+    reviews: reviews ? (json(reviews) ?? []).map(tag) : previous?.reviews ?? [],
+    mine: mine ? (json(mine) ?? []).map(tag) : previous?.mine ?? [],
   };
 }
 
+const PR_FIELDS = ["--state=open", "--limit=20", "--json", "number,title,url,repository,isDraft,author"];
+const shapePr = (p) => ({
+  id: `#${p.number}`, ref: `${p.repository?.nameWithOwner ?? ""}#${p.number}`, title: p.title, url: p.url,
+  draft: Boolean(p.isDraft), author: p.author?.login, host: "github.com",
+});
+
+let ghLogin = null; // gh's logged-in user, asked once
+// To review: PRs that ask for my review, plus PRs others opened on my own repos
+// (an outside contributor can't request a review, so theirs would never show).
+async function githubQueues(previous) {
+  if (ghLogin === null) ghLogin = json(await run_("gh", ["api", "user"]))?.login ?? "";
+  if (!ghLogin) return previous?.github ?? { reviews: [], mine: [] };
+  const [asked, onMine, mine] = await Promise.all([
+    run_("gh", ["search", "prs", "--review-requested=@me", ...PR_FIELDS]),
+    run_("gh", ["search", "prs", `--owner=${ghLogin}`, ...PR_FIELDS]),
+    run_("gh", ["search", "prs", "--author=@me", ...PR_FIELDS]),
+  ]);
+  const seen = new Set();
+  const reviews = asked || onMine
+    // Bots (dependabot) on my repos would bury the people; a bot that asks me directly stays.
+    ? [...(json(asked) ?? []), ...(json(onMine) ?? []).filter((p) => !p.author?.is_bot && !/\[bot\]$/.test(p.author?.login ?? ""))]
+      .filter((p) => p.author?.login !== ghLogin && !seen.has(p.url) && seen.add(p.url))
+      .map(shapePr)
+    : previous?.github?.reviews ?? [];
+  return { reviews, mine: mine ? (json(mine) ?? []).map(shapePr) : previous?.github?.mine ?? [] };
+}
+
+async function queues(gitlabHosts, previous) {
+  const [gitlab, github] = await Promise.all([gitlabQueues(gitlabHosts, previous), githubQueues(previous)]);
+  const all = [...Object.values(gitlab), github];
+  return { gitlab, github, reviews: all.flatMap((q) => q.reviews), mine: all.flatMap((q) => q.mine) };
+}
+
 let polling = false;
-let authHost = null; // glab's logged-in host, asked once
+let authHosts = null; // glab's logged-in hosts, asked once
 
 export async function pollGit() {
   if (polling) return;
@@ -112,20 +151,18 @@ export async function pollGit() {
 async function pollGitOnce() {
   const list = spaces();
   const all = panes();
-  const results = await Promise.all(list.map((s) => spaceInfo(s, all).catch(() => null)));
+  // glab prints auth status on stderr; the default host need not be a logged-in one.
+  if (authHosts === null) {
+    const auth = await exec("glab", ["auth", "status"], TIMEOUT).catch(() => null);
+    authHosts = loggedInHosts(`${auth?.stdout ?? ""}${auth?.stderr ?? ""}`);
+  }
+  const results = await Promise.all(list.map((s) => spaceInfo(s, all, authHosts).catch(() => null)));
   const bySpace = {};
   list.forEach((s, i) => { if (results[i]) bySpace[s.id] = results[i]; });
-  let gitlabHost = Object.values(bySpace).find((x) => x.provider === "gitlab" && !x.error)?.host;
-  if (!gitlabHost) {
-    // glab prints auth status on stderr; the default host need not be the logged-in one.
-    if (authHost === null) {
-      const auth = await exec("glab", ["auth", "status"], TIMEOUT).catch(() => null);
-      authHost = loggedInHosts(`${auth?.stdout ?? ""}${auth?.stderr ?? ""}`)[0] ?? "";
-    }
-    gitlabHost = authHost || undefined;
-  }
+  const gitlabHosts = [...new Set([...authHosts,
+    ...Object.values(bySpace).filter((x) => x.provider === "gitlab" && !x.error).map((x) => x.host)])];
   const before = shared("halo.git") ?? {};
-  const next = { bySpace, ...(await queues(gitlabHost, before)) };
+  const next = { bySpace, ...(await queues(gitlabHosts, before)) };
   const toasted = new Set();
   for (const [id, info] of Object.entries(bySpace)) {
     const was = before.bySpace?.[id]?.pipeline?.status;
@@ -178,13 +215,62 @@ function mrRow(t, mr, key) {
 }
 
 // One block per project: a bold name with its group path, then its MRs.
-function byProject(t, list, key) {
-  return v_flex().gap(8).children(groupByProject(list).map((g) => v_flex().gap(2)
-    .child(h_flex().h(22).gap(7).items_center()
+// A project header folds its MRs on click; right-click hides the project everywhere.
+function projectBlock(t, g, key, hideKey) {
+  const id = `p:${key}:${hideKey}`;
+  const isFolded = folded(id);
+  return v_flex().gap(2)
+    .child(h_flex().id(id).h(24).gap(7).items_center().rounded(4).cursor_pointer()
+      .hover((s) => s.bg(t.hover))
+      .on_click(() => toggleFold(id))
+      .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); openMenu("project", { key: hideKey }); })
+      .child(chevron(t, isFolded))
       .child(div().flex_none().text_size(12.5).font_semibold().text_color(t.foreground).child(g.name))
       .child(div().flex_1().min_w(0).truncate().font_family(MONO).text_size(10.5).text_color(t.dim).child(g.parent))
       .child(div().flex_none().font_family(MONO).text_size(10.5).text_color(t.dim).child(String(g.items.length))))
-    .children(g.items.map((mr) => mrRow(t, mr, key)))));
+    .when(!isFolded, (el) => el.children(g.items.map((mr) => mrRow(t, mr, key))));
+}
+
+const chevron = (t, isFolded) => svg(`mods/workspace-chrome/chevron-${isFolded ? "right" : "down"}.svg`).size(9).flex_none().text_color(t.dim);
+const projectKey = (mr) => `${mr.host ?? ""}:${String(mr.ref ?? "").replace(/[!#]\d+$/, "")}`;
+const hiddenSet = () => new Set(prefs().hiddenProjects ?? []);
+// Hidden projects count nowhere, the summaries included.
+const visible = (list) => { const h = hiddenSet(); return list.filter((mr) => !h.has(projectKey(mr))); };
+
+// One block per host (GitHub, and each GitLab glab is logged in to), foldable; inside,
+// projects. Host labels show only when there is more than one; hidden projects are left
+// out, with a line to bring them back.
+function byProject(t, list, key) {
+  const hosts = [...new Set(list.map((mr) => mr.host ?? ""))]
+    .sort((a, b) => (a === "github.com") - (b === "github.com"));
+  const gitlabs = hosts.filter((h) => h !== "github.com").length;
+  const title = (h) => (h === "github.com" ? "GitHub" : gitlabs > 1 ? `GitLab · ${h}` : "GitLab");
+  const hidden = hiddenSet();
+  let hiddenHere = 0;
+  const blocks = hosts.map((h) => {
+    const groups = groupByProject(list.filter((mr) => (mr.host ?? "") === h));
+    const shown = groups.filter((g) => !hidden.has(projectKey(g.items[0])));
+    hiddenHere += groups.length - shown.length;
+    if (!shown.length) return null;
+    const id = `h:${key}:${h}`;
+    const isFolded = folded(id);
+    const count = shown.reduce((n, g) => n + g.items.length, 0);
+    const color = t[h === "github.com" ? "ansi4" : "ansi3"];
+    return v_flex().gap(6)
+      .when(hosts.length > 1, (el) => el.child(h_flex().id(id).h(22).gap(6).items_center().rounded(4).cursor_pointer()
+        .hover((s) => s.bg(t.hover)).on_click(() => toggleFold(id))
+        .child(chevron(t, isFolded))
+        .child(div().font_family(MONO).text_size(10.5).text_color(color).child(title(h)))
+        .child(div().flex_1().h(1).bg(t.border))
+        .child(div().font_family(MONO).text_size(10.5).text_color(t.dim).child(String(count)))))
+      .when(hosts.length === 1 || !isFolded, (el) => el.children(shown.map((g) => projectBlock(t, g, key, projectKey(g.items[0])))));
+  }).filter(Boolean);
+  return v_flex().gap(10).children(blocks)
+    .when(hiddenHere > 0, (el) => el.child(div().id(`unhide-${key}`).h(22).flex().items_center().cursor_pointer()
+      .text_size(11).text_color(t.dim).hover((s) => s.text_color(t.foreground))
+      .tooltip("Show every hidden project again")
+      .on_click(() => setPrefs({ hiddenProjects: [] }))
+      .child(`${hiddenHere} hidden project${hiddenHere === 1 ? "" : "s"} · show`)));
 }
 
 // GIT › MR of the shown space.
@@ -221,11 +307,11 @@ export function mrSection(t) {
 export function reviewsSection(t) {
   const list = shared("halo.git")?.reviews ?? [];
   if (!list.length) return null;
-  return { summary: `${list.length} to review`, summaryColor: t.ansi3, body: byProject(t, list, "rev") };
+  return { summary: `${visible(list).length} to review`, summaryColor: t.ansi3, body: byProject(t, list, "rev") };
 }
 
 export function mineSection(t) {
   const list = shared("halo.git")?.mine ?? [];
   if (!list.length) return null;
-  return { summary: `${list.length} open`, body: byProject(t, list, "mine") };
+  return { summary: `${visible(list).length} open`, body: byProject(t, list, "mine") };
 }
