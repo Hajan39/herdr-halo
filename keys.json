@@ -1,0 +1,15 @@
+{
+  "layout:halo": {
+    "alt-h": "halo.nav-left",
+    "alt-j": "halo.nav-down",
+    "alt-k": "halo.nav-up",
+    "alt-l": "halo.nav-right",
+    "alt-left": "halo.resize-left",
+    "alt-right": "halo.resize-right",
+    "alt-up": "halo.resize-up",
+    "alt-down": "halo.resize-down",
+    "cmd-shift-r": "mod.open:halo-scripts",
+    "cmd-shift-j": "mod.open:halo-reply",
+    "cmd-shift-t": "mod.open:halo-task"
+  }
+}

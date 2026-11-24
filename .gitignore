@@ -1,0 +1,5 @@
+.DS_Store
+__pycache__/
+**/gpui-kit.d.ts
+**/herdr.d.ts
+**/jsconfig.json
