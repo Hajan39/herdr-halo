@@ -64,10 +64,23 @@ function syncDock(view, id, want) {
   run(want ? "layout.show" : "layout.hide", { id });
 }
 
+// Both docks share one "docks" row so the boundary between them trades width
+// between the two; the row's own width follows how many are open.
+const DOCK_PX = { dock: 700, devdock: 380 };
+function syncDocks(view, wants) {
+  const open = Object.keys(wants).filter((id) => wants[id]);
+  const key = open.join(",");
+  for (const id of Object.keys(wants)) syncDock(view, id, wants[id]);
+  if (key === view.docksKey) return;
+  view.docksKey = key;
+  if (open.length === 0) return run("layout.hide", { id: "docks" });
+  run("layout.resize", { id: "docks", px: open.reduce((sum, id) => sum + DOCK_PX[id], 0) + 8 * (open.length - 1) });
+  run("layout.show", { id: "docks" });
+}
+
 export function renderTabs(view, t) {
   const p = prefs();
-  syncDock(view, "dock", p.panel && visibleGroups(t, view, "agent").length > 0);
-  syncDock(view, "devdock", p.devdock);
+  syncDocks(view, { dock: Boolean(p.panel && visibleGroups(t, view, "agent").length > 0), devdock: Boolean(p.devdock) });
 
   const space = spaces().find((s) => s.active);
   const all = panes();

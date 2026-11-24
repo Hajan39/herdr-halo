@@ -151,48 +151,59 @@
               }
             },
             {
-              "id": "dock",
-              "type": "block",
+              "id": "docks",
+              "type": "row",
+              "gap": 8,
               "size": {
                 "px": 700
               },
-              "min": 300,
-              "max": 1000,
-              "hidden": true,
-              "background": "chrome",
-              "radius": 10,
-              "border": {
-                "width": 1,
-                "color": "border"
-              },
-              "content": {
-                "mod": "halo",
-                "props": {
-                  "role": "dock"
-                }
-              }
-            },
-            {
-              "id": "devdock",
-              "type": "block",
-              "size": {
-                "px": 380
-              },
               "min": 280,
-              "max": 700,
+              "max": 1400,
               "hidden": true,
-              "background": "chrome",
-              "radius": 10,
-              "border": {
-                "width": 1,
-                "color": "border"
-              },
-              "content": {
-                "mod": "halo",
-                "props": {
-                  "role": "devdock"
+              "children": [
+                {
+                  "id": "dock",
+                  "type": "block",
+                  "size": {
+                    "weight": 2
+                  },
+                  "min": 300,
+                  "background": "chrome",
+                  "radius": 10,
+                  "border": {
+                    "width": 1,
+                    "color": "border"
+                  },
+                  "content": {
+                    "mod": "halo",
+                    "props": {
+                      "role": "dock"
+                    }
+                  },
+                  "hidden": true
+                },
+                {
+                  "id": "devdock",
+                  "type": "block",
+                  "size": {
+                    "weight": 1
+                  },
+                  "min": 280,
+                  "background": "chrome",
+                  "radius": 10,
+                  "border": {
+                    "width": 1,
+                    "color": "border"
+                  },
+                  "content": {
+                    "mod": "halo",
+                    "props": {
+                      "role": "devdock"
+                    }
+                  },
+                  "hidden": true
                 }
-              }
+              ]
             },
             {
               "id": "side",
