@@ -6,6 +6,7 @@ import { h_flex } from "gpui-base";
 import { spaces, panes, agents, run, shared, layout, openOverlay } from "herdr";
 import { MONO, clean, prefs, setPrefs } from "./lib.js";
 import { visibleGroups } from "./dock.js";
+import { dot } from "./tree.js";
 
 const stop = (_e, cx) => cx.stop_propagation();
 
@@ -15,7 +16,7 @@ function lead(tabId, all) {
 }
 
 function icon(t, program, active) {
-  if (!program?.icon) return svg("mods/workspace-chrome/terminal.svg").size(13).text_color(active ? t.accent : t.dim);
+  if (!program?.icon) return svg("mods/workspace-chrome/terminal.svg").size(13).text_color(active ? t.foreground : t.dim);
   return program.tint ? svg(program.icon).size(13).text_color(active ? t.foreground : t.muted) : image(program.icon).w(13).h(13);
 }
 
@@ -23,22 +24,22 @@ function pill(t, tab, all, agentTab, spaceId) {
   const p = lead(tab.id, all);
   const name = agentTab ? clean(p?.title) || "agent" : tab.named ? tab.name : p?.program?.name ?? `term ${tab.index}`;
   return h_flex().id(`tab-${tab.id}`).h(26).px(10).gap(7).items_center().rounded(6).cursor_pointer().max_w(220)
-    .border(1).border_color(tab.active ? (agentTab ? t.working : t.accent) : "#00000000")
+    .border(1).border_color(tab.active ? t.input : "#00000000")
     .when(tab.active, (el) => el.bg(t.selected))
     .hover((s) => s.bg(t.hover))
     .on_mouse_down("left", stop)
     .on_click(() => run("tab.select", { id: tab.id }))
     // Herdr's own tab menu (rename, new tab, close), as the shipped tab bar opens it.
     .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); openOverlay({ mod: "menu", kind: "popup", width: 200, height: 100, props: { tab: "tab", target: { id: tab.id, space: spaceId } } }); })
-    .child(agentTab ? div().font_family(MONO).text_size(9.5).text_color(t.working).child("◆ AGENT") : icon(t, p?.program, tab.active))
+    .child(agentTab ? dot(t, agents().find((a) => a.tab === tab.id)?.status ?? "idle", 6) : icon(t, p?.program, tab.active))
     .child(div().min_w(0).truncate().text_size(12).text_color(tab.active ? t.foreground : t.muted).child(name));
 }
 
 // glyph: a workspace-chrome icon name, or a full "mods/…svg" path.
 function button(t, id, glyph, tip, onClick, on = false) {
   return div().id(id).size(26).rounded(6).flex().items_center().justify_center().cursor_pointer()
-    .text_color(on ? t.accent : t.dim).when(on, (el) => el.bg(t.selected))
-    .hover((s) => s.bg(t.hover).text_color(t.accent)).tooltip(tip)
+    .text_color(on ? t.foreground : t.dim).when(on, (el) => el.bg(t.hover))
+    .hover((s) => s.bg(t.hover).text_color(t.foreground)).tooltip(tip)
     .on_mouse_down("left", stop).on_click(onClick)
     .child(svg(glyph.startsWith("mods/") ? glyph : `mods/workspace-chrome/${glyph}.svg`).size(14));
 }
@@ -56,26 +57,27 @@ function findNode(node, id) {
 const side = (child) => () => { run("layout.select", { stack: "side-body", child }); run("layout.toggle", { id: "side" }); };
 const sep = (t) => div().w(1).h(14).bg(t.border).mx(2);
 
-// Edge-triggered so a dock isn't re-shown or re-hidden on every render.
-function syncDock(view, id, want) {
-  view.shown ??= {};
-  if (want === view.shown[id]) return;
-  view.shown = { ...view.shown, [id]: want };
-  run(want ? "layout.show" : "layout.hide", { id });
+// Compared against the live layout, not a remembered state: a layout reload resets
+// nodes to their JSON "hidden" while this mod keeps running.
+function syncDock(root, id, want) {
+  const node = findNode(root, id);
+  if (node && Boolean(node.hidden) === want) run(want ? "layout.show" : "layout.hide", { id });
 }
 
 // Both docks share one "docks" row so the boundary between them trades width
 // between the two; the row's own width follows how many are open.
 const DOCK_PX = { dock: 700, devdock: 380 };
 function syncDocks(view, wants) {
+  const root = shared("layout") === "halo" ? layout() : null;
+  if (!root) return;
   const open = Object.keys(wants).filter((id) => wants[id]);
+  for (const id of Object.keys(wants)) syncDock(root, id, wants[id]);
+  syncDock(root, "docks", open.length > 0);
+  // Resize only when the set changes, so a width the user dragged survives.
   const key = open.join(",");
-  for (const id of Object.keys(wants)) syncDock(view, id, wants[id]);
-  if (key === view.docksKey) return;
+  if (key === view.docksKey || open.length === 0) return;
   view.docksKey = key;
-  if (open.length === 0) return run("layout.hide", { id: "docks" });
   run("layout.resize", { id: "docks", px: open.reduce((sum, id) => sum + DOCK_PX[id], 0) + 8 * (open.length - 1) });
-  run("layout.show", { id: "docks" });
 }
 
 export function renderTabs(view, t) {
@@ -94,8 +96,8 @@ export function renderTabs(view, t) {
       .bg(`${t.blocked}26`).border(1).border_color(t.blocked).font_family(MONO).text_size(10).text_color(t.blocked)
       .tooltip("Reply to waiting agents (cmd-shift-j)")
       .on_mouse_down("left", stop).on_click(() => run("mod.open", { name: "halo-reply" }))
-      .child(`! ${waiting} WAITING`)))
-    .child(div().font_family(MONO).text_size(10).text_color(t.accent).flex_none().child(`◢ ${space?.name ?? "—"}`.toUpperCase()))
+      .child(`${waiting} waiting`)))
+    .child(div().text_size(12).font_semibold().text_color(t.foreground).flex_none().child(space?.name ?? "—"))
     .child(div().w(1).h(14).bg(t.border).mx(4))
     .child(h_flex().id("halo-tabs").flex_1().min_w(0).gap(4).overflow_x_scroll()
       .children(tabs.map((tab) => pill(t, tab, all, isAgent(tab), space?.id))))

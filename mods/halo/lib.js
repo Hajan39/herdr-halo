@@ -1,5 +1,5 @@
 // Shared helpers for the halo views: label parsing, agent lookup, formatting and the
-// HUD primitives (section header, corner brackets, segmented bar).
+// HUD primitives (section header, segmented bar).
 
 import { div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
@@ -48,24 +48,23 @@ const chevron = (t, isFolded, size = 10) =>
   svg(`mods/workspace-chrome/chevron-${isFolded ? "right" : "down"}.svg`).size(size).text_color(t.dim);
 
 // A themed group (AGENT / GIT / DEV) or a section inside one. The header toggles the
-// fold; folded, it still shows the summary so the line stays informative.
+// fold. The summary shows only while folded: open, the body says it already.
 export function section(t, id, title, info, { group = false, byDefault = false } = {}) {
   if (!info) return null;
   // A one-line section (info.onOpen) has no body: its header opens something instead.
   const isFolded = info.onOpen ? true : folded(id, byDefault);
   const summary = info.summary
-    ? div().max_w(220).min_w(0).truncate().font_family(MONO).text_size(9.5).text_color(info.summaryColor ?? t.dim).child(info.summary)
+    ? div().max_w(220).min_w(0).truncate().font_family(MONO).text_size(10.5).text_color(info.summaryColor ?? t.dim).child(info.summary)
     : null;
-  const header = h_flex().id(`fold-${id}`).h(group ? 26 : 22).gap(7).items_center().cursor_pointer().rounded(4)
+  const header = h_flex().id(`fold-${id}`).h(group ? 26 : 24).gap(7).items_center().cursor_pointer().rounded(4)
     .hover((s) => s.bg(t.hover))
     .on_click(() => (info.onOpen ? info.onOpen() : toggleFold(id, byDefault)))
     .when(Boolean(info.onOpen), (el) => el.tooltip(info.tooltip ?? ""))
     .child(div().flex_none().child(chevron(t, isFolded, group ? 11 : 9)))
-    .when(group, (el) => el.child(div().w(2).h(11).bg(t.accent)))
-    .child(div().flex_none().font_family(MONO).text_size(group ? 10.5 : 9.5).font_semibold()
-      .text_color(group ? t.accent : t.muted).child(title))
-    .child(div().flex_1().min_w(12).h(1).bg(group ? t.accent : t.border).opacity(group ? 0.2 : 0.8))
-    .when(Boolean(summary), (el) => el.child(summary));
+    .child(div().flex_none().font_family(MONO).text_size(10.5).font_semibold()
+      .text_color(group ? t.foreground : t.muted).child(title))
+    .child(div().flex_1().min_w(12).h(1).bg(t.border))
+    .when(Boolean(summary) && isFolded, (el) => el.child(summary));
   return v_flex().gap(group ? 8 : 6)
     .child(header)
     .when(!isFolded && Boolean(info.body), (el) => el.child(div().pl(group ? 0 : 16).child(info.body)));
@@ -75,7 +74,7 @@ export const MONO = "JetBrainsMono Nerd Font Mono";
 export const WARN_MS = 10 * 60 * 1000;
 export const CRIT_MS = 5 * 60 * 1000;
 
-export const STATUS_LABEL = { blocked: "WAITING", done: "DONE", working: "ACTIVE", idle: "IDLE" };
+export const STATUS_LABEL = { blocked: "waiting", done: "done", working: "working", idle: "idle" };
 
 // Category colors come from the terminal palette so they follow the theme.
 export const CATS = [
@@ -144,13 +143,13 @@ export function tok(n) {
 export function cacheTtl(status, t) {
   if (!status?.exp) return null;
   const left = status.exp * 1000 - Date.now();
-  if (left <= 0) return { left, color: t.dim, text: "COLD" };
-  const color = left < CRIT_MS ? t.blocked : left < WARN_MS ? t.ansi3 : t.accent;
+  if (left <= 0) return { left, color: t.dim, text: "cold" };
+  const color = left < CRIT_MS ? t.blocked : left < WARN_MS ? t.ansi3 : t.dim;
   return { left, color, text: dur(left) };
 }
 
 export function quotaColor(pct, t) {
-  return pct >= 90 ? t.blocked : pct >= 70 ? t.ansi3 : t.accent;
+  return pct >= 90 ? t.blocked : pct >= 70 ? t.ansi3 : t.muted;
 }
 
 // Newest statusline label across live Claude terminals: rate limits are per account,
@@ -167,21 +166,9 @@ export function latestStatus() {
 // "▍CONTEXT ───────── 01" style header.
 export function hud(t, title, right) {
   return h_flex().h(22).flex_none().gap(8).items_center()
-    .child(div().w(2).h(10).bg(t.accent))
-    .child(div().font_family(MONO).text_size(10).font_semibold().text_color(t.accent).child(title))
-    .child(div().flex_1().h(1).bg(t.accent).opacity(0.18))
-    .when(right != null, (el) => el.child(div().font_family(MONO).text_size(10).text_color(t.dim).child(right)));
-}
-
-// Corner brackets drawn over a panel's edges; the panel itself must be relative.
-export function brackets(el, t, size = 8) {
-  const c = (pos) => {
-    let d = div().absolute().size(size).border_color(t.accent).opacity(0.55);
-    if (pos.includes("t")) d = d.top(0).border_t(1); else d = d.bottom(0).border_b(1);
-    if (pos.includes("l")) d = d.left(0).border_l(1); else d = d.right(0).border_r(1);
-    return d;
-  };
-  return el.relative().child(c("tl")).child(c("tr")).child(c("bl")).child(c("br"));
+    .child(div().font_family(MONO).text_size(10.5).font_semibold().text_color(t.muted).child(title))
+    .child(div().flex_1().h(1).bg(t.border))
+    .when(right != null, (el) => el.child(div().font_family(MONO).text_size(10.5).text_color(t.dim).child(right)));
 }
 
 // A bar of `count` cells filled by consecutive [fraction, color] parts; the rest is track.

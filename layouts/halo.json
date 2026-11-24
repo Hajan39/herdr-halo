@@ -32,13 +32,15 @@
     "background": "#1e1e2ee0",
     "canvas": "#00000000",
     "chrome": "#11111bc4",
-    "border": "#00e8c624",
-    "input": "#00e8c640",
+    "border": "#cdd6f412",
+    "input": "#cdd6f42e",
     "selected": "#00e8c61c",
     "hover": "#cdd6f40f",
     "working": "#89dceb",
     "blocked": "#fab387",
-    "done": "#a6e3a1"
+    "done": "#a6e3a1",
+    "dim": "#8a8fa8",
+    "muted": "#a6adc8"
   },
   "ui_font": "Geist",
   "terminal_opacity": 0.92,
@@ -136,7 +138,7 @@
                   },
                   "focus": {
                     "width": 1,
-                    "color": "accent"
+                    "color": "#00e8c666"
                   },
                   "header": {
                     "content": {

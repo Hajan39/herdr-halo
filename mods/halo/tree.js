@@ -7,7 +7,7 @@ import { spaces, agents, terminals, run, setAgentOrder, openOverlay, shared } fr
 import { treeServersRow } from "./servers.js";
 import { treeGitRow } from "./git.js";
 import { openMenu } from "./lib.js";
-import { MONO, STATUS_LABEL, label, task, cacheTtl, latestStatus, quotaColor, dur, hud, segbar, clean, folded, toggleFold } from "./lib.js";
+import { MONO, STATUS_LABEL, label, task, cacheTtl, latestStatus, quotaColor, dur, hud, clean, folded, toggleFold } from "./lib.js";
 
 const RANK = { blocked: 4, done: 3, working: 2, idle: 1 };
 
@@ -49,11 +49,11 @@ function agentRow(t, a, terminal, all) {
   const ttl = a.app === "claude-code" ? cacheTtl(status, t) : null;
   const allSubs = subagents(terminal, all);
   const subs = allSubs.slice(0, SUBAGENTS_SHOWN);
-  const meta = h_flex().gap(6).font_family(MONO).text_size(9.5).min_w(0)
+  const meta = h_flex().gap(6).font_family(MONO).text_size(10.5).min_w(0)
     .child(div().flex_none().text_color(t[a.status] ?? t.dim).child(STATUS_LABEL[a.status] ?? ""))
-    .when(status?.ctx != null, (el) => el.child(div().flex_none().text_color(t.dim).child(`CTX ${status.ctx}%`)))
+    .when(status?.ctx != null, (el) => el.child(div().flex_none().text_color(t.dim).child(`ctx ${status.ctx}%`)))
     .when(Boolean(ttl), (el) => el.child(div().flex_none().text_color(ttl.color)
-      .child(ttl.left > 0 ? `TTL ${ttl.text}` : "TTL COLD")));
+      .child(`cache ${ttl.text}`)));
 
   return v_flex()
     .child(h_flex().id(`ag-${a.address}`).ml(13).pl(10).pr(8).py(5).gap(8).items_start().cursor_pointer()
@@ -64,7 +64,10 @@ function agentRow(t, a, terminal, all) {
       .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); openMenu("agent", { terminal: a.address }); })
       .child(div().pt(4).child(dot(t, a.status, 6)))
       .child(v_flex().flex_1().min_w(0).gap(2)
-        .child(div().text_size(11.5).truncate().text_color(a.focused ? t.foreground : t.muted).child(where?.goal || task(a, terminal)))
+        .child(div().text_size(11.5)
+          // The focused or waiting agent shows its whole task; the rest stay one line.
+          .when(!a.focused && a.status !== "blocked", (el) => el.truncate())
+          .text_color(a.focused ? t.foreground : t.muted).child(where?.goal || task(a, terminal)))
         .when(Boolean(where?.waiting || where?.doing), (el) => el.child(h_flex().gap(5).items_center().min_w(0)
           .when(!where.waiting, (row) => row.child(svg("mods/halo/icons/doing.svg").size(10).flex_none().text_color(t.dim)))
           .child(div().flex_1().min_w(0).text_size(10.5).truncate()
@@ -72,17 +75,17 @@ function agentRow(t, a, terminal, all) {
         .child(meta)))
     .children(subs.map((s) => h_flex().ml(13).pl(26).pr(8).py(2).gap(6).items_center()
       .border_l(1).border_color(t.border)
-      .child(div().font_family(MONO).text_size(9).text_color(t.dim).child("└"))
+      .child(div().font_family(MONO).text_size(10).text_color(t.dim).child("└"))
       .child(dot(t, s.status, 5))
       .child(div().flex_1().min_w(0).truncate().text_size(10.5).text_color(t.dim).child(s.title))))
     .when(allSubs.length > SUBAGENTS_SHOWN, (el) => el.child(div().ml(13).pl(26).py(1).border_l(1).border_color(t.border)
-      .font_family(MONO).text_size(9).text_color(t.dim).child(`+${allSubs.length - SUBAGENTS_SHOWN} MORE SUBAGENTS`)));
+      .font_family(MONO).text_size(10).text_color(t.dim).child(`+${allSubs.length - SUBAGENTS_SHOWN} more subagents`)));
 }
 
 function spaceRow(t, s, folded, count, onFold) {
   // The fold toggle is a sibling of the select row, not a child: nested clicks also
   // reached the row and switched space.
-  const fold = div().id(`fold-${s.id}`).size(22).flex_none().rounded(5).flex().items_center().justify_center()
+  const fold = div().id(`fold-${s.id}`).size(24).flex_none().rounded(5).flex().items_center().justify_center()
     .when(count > 0, (el) => el.cursor_pointer().hover((st) => st.bg(t.hover))
       .tooltip(folded ? "Show agents" : "Hide agents")
       .on_click(() => onFold()))
@@ -97,9 +100,9 @@ function spaceRow(t, s, folded, count, onFold) {
     .child(svg("mods/workspace-chrome/folder.svg").size(14).flex_none().text_color(s.active ? t.accent : t.muted))
     .child(div().flex_1().min_w(0).truncate().text_size(13.5).font_semibold()
       .text_color(s.active ? t.foreground : t.muted).child(s.name))
-    .when(Boolean(s.branch), (el) => el.child(div().flex_none().font_family(MONO).text_size(9.5).text_color(t.dim)
+    .when(Boolean(s.branch), (el) => el.child(div().flex_none().font_family(MONO).text_size(10.5).text_color(t.dim)
       .child(s.branch.length > 14 ? `${s.branch.slice(0, 13)}…` : s.branch)))
-    .when(folded && count > 0, (el) => el.child(div().flex_none().font_family(MONO).text_size(9.5).text_color(t.dim).child(`${count}`)))
+    .when(folded && count > 0, (el) => el.child(div().flex_none().font_family(MONO).text_size(10.5).text_color(t.dim).child(`${count}`)))
     .when(s.status != null, (el) => el.child(dot(t, s.status, 6)));
   return h_flex().gap(2).items_center().child(fold).child(row);
 }
@@ -112,18 +115,18 @@ function usage(t) {
     const pct = Math.round(q.used_percentage);
     const color = quotaColor(pct, t);
     return v_flex().gap(4)
-      .child(h_flex().font_family(MONO).text_size(9.5).gap(6)
+      .child(h_flex().font_family(MONO).text_size(10.5).gap(6)
         .child(div().text_color(t.muted).child(name))
         .child(div().flex_1())
         .child(div().text_color(color).child(`${pct}%`))
         .when(Boolean(q.resets_at), (el) => el.child(div().text_color(t.dim).child(`↻ ${dur(q.resets_at * 1000 - Date.now())}`))))
-      .child(segbar(t, [[pct / 100, color]], 28, 4));
+      .child(div().w_full().h(3).rounded(2).bg(t.border).child(div().h_full().rounded(2).bg(color).w(`${Math.min(100, pct)}%`)));
   };
-  const rows = [row("five_hour", "SESSION 5H"), row("seven_day", "WEEK 7D")].filter(Boolean);
+  const rows = [row("five_hour", "Session · 5h"), row("seven_day", "Week · 7d")].filter(Boolean);
   return v_flex().flex_none().px(10).pt(6).pb(10).gap(8).border_t(1).border_color(t.border)
     .child(hud(t, "USAGE", s?.cost != null ? `$${s.cost.toFixed(2)}` : null))
-    .when(rows.length === 0, (el) => el.child(div().font_family(MONO).text_size(9.5).text_color(t.dim)
-      .child("NO SIGNAL · start a Claude session")))
+    .when(rows.length === 0, (el) => el.child(div().text_size(11).text_color(t.dim)
+      .child("No usage yet. Start a Claude session.")))
     .children(rows);
 }
 
@@ -154,13 +157,13 @@ export function renderTree(t) {
     .child(v_flex().id("halo-tree").flex_1().min_h(0).px(6).pb(6).gap(4).overflow_y_scrollbar()
       .child(h_flex().px(4).gap(6).items_center()
         .child(div().flex_1().child(hud(t, "SPACES", waiting ? `${waiting} WAITING` : `${list.length} AGENTS`)))
-        .when(Boolean(shared("halo.hasWaypoint")), (el) => el.child(div().id("space-waypoint").size(20).rounded(5)
+        .when(Boolean(shared("halo.hasWaypoint")), (el) => el.child(div().id("space-waypoint").size(24).rounded(5)
           .flex().items_center().justify_center().cursor_pointer()
           .text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.accent))
           .tooltip("Waypoints (cmd-shift-n) · ctrl+s inside saves the focused folder")
           .on_click(() => run("mod.open", { name: "waypoint" }))
           .child(svg("mods/halo/icons/waypoint.svg").size(12))))
-        .child(div().id("space-new").size(20).rounded(5).flex().items_center().justify_center().cursor_pointer()
+        .child(div().id("space-new").size(24).rounded(5).flex().items_center().justify_center().cursor_pointer()
           .text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.accent)).tooltip("New space: waypoints, repos or a typed path")
           .on_click(() => run("mod.open", { name: "halo-space" }))
           .child(svg("mods/workspace-chrome/plus.svg").size(12))))
@@ -172,6 +175,5 @@ export function renderBrand(t) {
   // Leaves the left 76px to the macOS traffic lights.
   return h_flex().size_full().pl(84).pr(12).gap(8).items_center()
     .child(div().size(7).rounded(4).bg(t.accent).loop("opacity", { from: 0.35, to: 1, period: 2400 }))
-    .child(div().font_family(MONO).text_size(11).font_semibold().text_color(t.foreground).child("HALO"))
-    .child(div().font_family(MONO).text_size(9).text_color(t.dim).child("// AGENT CONSOLE"));
+    .child(div().font_family(MONO).text_size(11).font_semibold().text_color(t.foreground).child("HALO"));
 }

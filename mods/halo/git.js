@@ -172,19 +172,18 @@ function mrRow(t, mr, key) {
     .border_l(1).border_color(t.border)
     .hover((s) => s.bg(t.hover)).tooltip(`Open ${mr.ref}`).on_click(() => openUrl(mr.url))
     .on_mouse_down("right", (_e, cx) => { cx.stop_propagation(); openMenu("mr", { id: mr.id, url: mr.url }); })
-    .child(div().w(48).flex_none().font_family(MONO).text_size(10).text_color(t.accent).child(mr.id))
+    .child(div().w(48).flex_none().font_family(MONO).text_size(10.5).text_color(t.dim).child(mr.id))
     .child(div().flex_1().min_w(0).truncate().text_size(12).text_color(mr.draft ? t.dim : t.foreground).child(mr.title))
-    .when(mr.draft, (el) => el.child(div().flex_none().font_family(MONO).text_size(9).text_color(t.dim).child("DRAFT")));
+    .when(mr.draft, (el) => el.child(div().flex_none().font_family(MONO).text_size(10.5).text_color(t.dim).child("draft")));
 }
 
 // One block per project: a bold name with its group path, then its MRs.
 function byProject(t, list, key) {
   return v_flex().gap(8).children(groupByProject(list).map((g) => v_flex().gap(2)
     .child(h_flex().h(22).gap(7).items_center()
-      .child(svg("mods/workspace-chrome/folder.svg").size(12).flex_none().text_color(t.accent))
       .child(div().flex_none().text_size(12.5).font_semibold().text_color(t.foreground).child(g.name))
-      .child(div().flex_1().min_w(0).truncate().font_family(MONO).text_size(9.5).text_color(t.dim).child(g.parent))
-      .child(div().flex_none().font_family(MONO).text_size(9.5).text_color(t.muted).child(String(g.items.length))))
+      .child(div().flex_1().min_w(0).truncate().font_family(MONO).text_size(10.5).text_color(t.dim).child(g.parent))
+      .child(div().flex_none().font_family(MONO).text_size(10.5).text_color(t.dim).child(String(g.items.length))))
     .children(g.items.map((mr) => mrRow(t, mr, key)))));
 }
 
@@ -209,13 +208,13 @@ export function mrSection(t) {
         .child(div().text_size(13).font_medium().text_color(t.foreground).child(`${g.mr.id} ${g.mr.title}`))
         .child(h_flex().gap(8).items_center()
           .child(div().font_family(MONO).text_size(9.5).text_color(g.mr.status === "mergeable" ? t.done : t.ansi3).child(g.mr.status ?? ""))
-          .when(g.mr.draft, (el) => el.child(div().font_family(MONO).text_size(9.5).text_color(t.dim).child("DRAFT")))
+          .when(g.mr.draft, (el) => el.child(div().font_family(MONO).text_size(10.5).text_color(t.dim).child("draft")))
           .when(g.mr.notes > 0, (el) => el.child(div().font_family(MONO).text_size(9.5).text_color(t.dim).child(`${g.mr.notes} notes`)))
           .child(div().flex_1())
           .child(smallButton(t, "mr-open", "OPEN", () => openUrl(g.mr.url)))
           .child(smallButton(t, "mr-review", "REVIEW WITH CLAUDE", () => run("tab.new",
             { argv: ["claude"], name: `review ${g.mr.id}`, task: `Review this merge request and report findings: ${g.mr.url}` }))))
-      : div().font_family(MONO).text_size(10).text_color(t.dim).child(`NO OPEN ${g.provider === "github" ? "PR" : "MR"} FOR THIS BRANCH`));
+      : div().text_size(11).text_color(t.dim).child(`No open ${g.provider === "github" ? "PR" : "MR"} for this branch`));
   return { summary: g.mr ? `${g.mr.id}${status ? ` · ${status}` : ""}` : status ?? "no MR", summaryColor: status ? PIPE_COLOR(t, status) : null, body };
 }
 

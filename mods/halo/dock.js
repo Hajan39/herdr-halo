@@ -3,7 +3,7 @@
 
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { MONO, focusedAgent, prefs, setPrefs, section, brackets } from "./lib.js";
+import { MONO, focusedAgent, prefs, setPrefs, section } from "./lib.js";
 import { briefSection, contextSection, activitySection, cacheSection } from "./agent.js";
 import { changesSection, needsRefresh, refreshChanges } from "./changes.js";
 import { serversSection, foreignSection } from "./servers.js";
@@ -67,15 +67,15 @@ function groupBody(t, list, wide) {
 }
 
 const NEXT_COLUMNS = { auto: "1", 1: "2", 2: "auto" };
-const COLUMNS_LABEL = { auto: "AUTO", 1: "1 COL", 2: "2 COL" };
+const COLUMNS_LABEL = { auto: "auto columns", 1: "1 column", 2: "2 columns" };
 
 function columnsToggle(t, mode) {
-  return h_flex().id("dock-columns").h(20).px(6).gap(5).rounded(4).items_center().cursor_pointer()
-    .text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.accent))
-    .tooltip(`Columns: ${COLUMNS_LABEL[mode]} (click to switch)`)
+  return h_flex().id("dock-columns").h(24).px(6).gap(5).rounded(4).items_center().cursor_pointer()
+    .text_color(t.dim).hover((s) => s.bg(t.hover).text_color(t.foreground))
+    .tooltip("Click to switch the dock layout")
     .on_click(() => setPrefs({ columns: NEXT_COLUMNS[mode] }))
     .child(svg(`mods/halo/icons/columns-${mode === "auto" ? "auto" : mode}.svg`).size(13))
-    .child(div().font_family(MONO).text_size(9).child(COLUMNS_LABEL[mode]));
+    .child(div().text_size(11).child(COLUMNS_LABEL[mode]));
 }
 
 export function renderDock(view, t, cx, dock = "agent") {
@@ -85,13 +85,13 @@ export function renderDock(view, t, cx, dock = "agent") {
   const mode = String(prefs().columns ?? "auto");
   const wide = mode === "2" || (mode === "auto" && (view.size?.width ?? 0) >= TWO_COLUMNS_FROM);
   const body = v_flex().id("dock").size_full().p(12).gap(14).overflow_y_scrollbar()
-    .child(h_flex().h(20).justify_end().child(columnsToggle(t, mode)))
+    .child(h_flex().h(24).justify_end().child(columnsToggle(t, mode)))
     .when(groups.length === 0, (el) => el.child(div().text_size(11).text_color(t.dim)
       .child(dock === "dev" ? "No repo remote, dev servers or dev-port listeners here." : "Nothing to show here.")))
     .children(groups.map((g) => section(t, `g:${g.id}`, g.title, {
       summary: summaryOf(g.list),
       body: groupBody(t, g.list, wide),
     }, { group: true })));
-  return brackets(div().id("dock-root").size_full()
-    .on_size_change((size, cx) => { view.size = size; cx.notify(); }).child(body), t);
+  return div().id("dock-root").size_full()
+    .on_size_change((size, cx) => { view.size = size; cx.notify(); }).child(body);
 }
